@@ -3,43 +3,69 @@
 # SPDX-FileCopyrightText: 2025 The Linux Foundation
 
 # Action test/validation workflow
-name: "Test GitHub Action 🧪"
+name: 'Test GitHub Action 🧪'
 
 # yamllint disable-line rule:truthy
 on:
   workflow_dispatch:
   push:
-    branches: ["main"]
+    branches: ['main']
   pull_request:
-    branches: ["main"]
+    branches: ['main']
 
 permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   ### Test the GitHub Action in this Repository ###
   tests:
-    name: "Test local GitHub Action"
+    name: 'Test local GitHub Action'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
-      - name: "Checkout repository"
+      - name: 'Checkout repository'
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      # Perform setup prior to running test(s)
-      - name: "Testing setup step"
-        shell: bash
-        run: |
-          # Testing setup step
-          echo "Testing setup step"
-          echo "Testing setup step/summary output" >> "$GITHUB_STEP_SUMMARY"
-
+      # Test against a directory containing no Python project code
+      # This will not do anything, but not fail either
       - name: "Running local action: ${{ github.repository }}"
         uses: ./
 
-      - name: "Validating local action: ${{ github.repository }}"
+      - name: "Running local action: ${{ github.repository }} [Failure Test]"
+        id: failure
+        uses: ./
+        with:
+          # Set flag to prevent the silent failure in initial test above
+          exit_on_fail: true
+        # Override the error condition
+        continue-on-error: true
+
+      - name: 'Error if step above did NOT fail'
+        if: steps.failure.outcome == 'success'
         shell: bash
         run: |
-          # Local action validation
-          echo "Validating local action: ${{ github.repository }}"
-          echo "Validation step summary output" >> "$GITHUB_STEP_SUMMARY"
+          # Error if step above did NOT fail
+          echo "Error: previous test step did NOT fail ❌"
+          exit 1
+
+      # Checkout the test Python project
+      - name: "Checkout sample project repository"
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: "lfreleng-actions/test-python-project"
+          path: "test-python-project"
+
+      # Run a valid test against it
+      - name: "Run action: ${{ github.repository }}"
+        uses: ./
+        # PDM project action does not work when project is not local repository
+        # This will need to be directly tested/consumed somewhere downstream
+        continue-on-error: true
+        with:
+          path_prefix: "test-python-project"
+          # Flag needed to prevent local/test repository checkout conflicts
+          no_checkout: true
