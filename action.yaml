@@ -2,38 +2,200 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2025 The Linux Foundation
 
-# actions-template
-name: "🛠️ Actions Template"
-description: "Description of action"
-# Any relevant notes/observations can go here
+# python-dependencies-update-action
+name: ♻️ Python Dependencies Action
+description: Updates the dependencies of a Python project
 
 inputs:
-  INPUT:
-    description: "Description of input"
+  path_prefix:
+    description: 'Directory location containing project code'
     required: false
     type: string
-    default: "input"
-
-outputs:
-  OUTPUT:
-    description: "Description of output"
-    value: ${{ steps.code.outputs.output }}
+    default: '.'
+  token:
+    description: "Github token with the required permissions"
+    required: false
+    default: "${{ github.token }}"
+  message:
+    description: 'Commit message and pull request title'
+    required: false
+    default: 'chore: Update Python dependencies'
+  sign-off-commit:
+    description: 'Whether commit message contains signed-off-by'
+    required: false
+    default: true
+  sign-commits:
+    description: 'Sign commits as github-actions[bot]'
+    required: false
+    default: true
+  exit_on_fail:
+    description: 'Exits with error status if no Python code found'
+    type: 'boolean'
+    required: false
+    default: false
+  no_checkout:
+    description: 'Do not checkout local repository; used for testing'
+    type: 'boolean'
+    required: false
+    default: false
 
 runs:
-  using: "composite"
+  using: 'composite'
   steps:
-    - name: "Friendly Name"
-      id: code
+    # yamllint disable-line rule:line-length
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      if: inputs.no_checkout != 'true'
+
+    - name: "Verify path prefix"
+      if: inputs.path_prefix != '.'
       shell: bash
       run: |
-        # Friendly Name
-        INPUT="${{ inputs.input }}"
-        if [ -z "$INPUT" ]; then
-          echo "Error: mandatory input INPUT was not set/configured ❌"
+        # Verify path prefix is valid directory path
+        if [ ! -d "${{ inputs.path_prefix }}" ]; then
+          echo "Error: invalid path/prefix to project directory ❌"
           exit 1
         fi
 
-        echo "output=$INPUT" >> "$GITHUB_ENV"
-        echo "output=$INPUT" >> "$GITHUB_OUTPUT"
-        echo "Action received a valid input: $INPUT ✅"
-        echo "Action received a valid input: $INPUT ✅" >> "$GITHUB_STEP_SUMMARY"
+    - name: 'Check for file: pyproject.toml'
+      id: pyproject-toml
+      # yamllint disable-line rule:line-length
+      uses: lfreleng-actions/path-check-action@554ef2267e6810ab7ac56506c8c1fd00725d59b1 # v0.1.0
+      with:
+        path: "${{ inputs.path_prefix }}/pyproject.toml"
+
+    - name: 'Set up Python [pyproject.toml]'
+      if: steps.pyproject-toml.outputs.type == 'file'
+      # yamllint disable-line rule:line-length
+      uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+      with:
+        python-version-file: "${{ inputs.path_prefix }}/pyproject.toml"
+
+    - name: 'Check for file: pdm.lock'
+      id: pdm-lock
+      # yamllint disable-line rule:line-length
+      uses: lfreleng-actions/path-check-action@554ef2267e6810ab7ac56506c8c1fd00725d59b1 # v0.1.0
+      with:
+        path: "${{ inputs.path_prefix }}/pdm.lock"
+
+    # This step used for first run, where pdm.lock file is absent
+    # But PDM is referenced as desired backend in pyproject.toml
+    - name: 'Check for PDM stanza: pyproject.toml'
+      id: pdm-grep
+      # yamllint disable-line rule:line-length
+      uses: lfreleng-actions/file-grep-regex-action@321870aafe79f2205c9432351b65df9f48f71177 # v0.1.1
+      with:
+        flags: ''
+        regex: 'tool.pdm'
+        filename: "${{ inputs.path_prefix }}/pyproject.toml"
+        no_fail: 'true'
+
+    - name: 'Check for file: Pipfile'
+      id: pipfile
+      # yamllint disable-line rule:line-length
+      uses: lfreleng-actions/path-check-action@554ef2267e6810ab7ac56506c8c1fd00725d59b1 # v0.1.0
+      with:
+        path: "${{ inputs.path_prefix }}/Pipfile"
+
+    - name: 'Python project files NOT found'
+      # yamllint disable-line rule:line-length
+      if: steps.pipfile.outputs.type != 'file' && steps.pyproject-toml.outputs.type != 'file'
+      shell: bash
+      run: |
+        # Python project files NOT found
+        echo '# Python Dependency Updates ♻️' >> "$GITHUB_STEP_SUMMARY"
+        if [ "${{ inputs.exit_on_fail }}" = "true" ]; then
+          echo "Error: Python project files NOT found ❌" \
+            >> "$GITHUB_STEP_SUMMARY"
+          echo "Error: Python project files NOT found ❌"
+          exit 1
+        else
+          echo '# Python Dependency Updates ♻️' \
+            >> "$GITHUB_STEP_SUMMARY"
+          echo "Warning: Python project files NOT found ⚠️" \
+            >> "$GITHUB_STEP_SUMMARY"
+        fi
+
+    - name: 'Update Python dependencies [pdm]'
+      # yamllint disable-line rule:line-length
+      if: steps.pdm-lock.outputs.type == 'file' || steps.pdm-grep.outputs.extracted_string != ''
+      id: pdm-change
+      # yamllint disable-line rule:line-length
+      uses: pdm-project/update-deps-action@22852fcff9a131d732730e8db92cc9502643a260 # v1.12
+      with:
+        sign-off-commit: "true"
+        token: ${{ inputs.token }}
+        commit-message: ${{ inputs.message }}
+        pr-title: ${{ inputs.message }}
+        update-strategy: eager
+        install-plugins: "false"
+
+    - name: 'Update Python dependencies [pipenv]'
+      id: pipenv
+      if: steps.pipfile.outputs.type == 'file'
+      shell: bash
+      run: |
+        # Update Python dependencies [pipenv]
+        pip install --upgrade -q pipenv
+        cd ${{ inputs.path_prefix }}
+        OUTPUT=$(pipenv lock)
+
+    - name: 'Detect repository changes'
+      id: detect-changes
+      if: steps.pipfile.outputs.type == 'file'
+      shell: bash
+      run: |
+        # Detect repository changes
+        if [[ `git status --porcelain` ]]; then
+          echo "changed=true" >> $GITHUB_OUTPUT
+          echo "Dependency updates required ✅"
+        else
+          echo "changed=false" >> $GITHUB_OUTPUT
+          echo "No dependency updates required 💬"
+        fi
+
+    - name: 'Create pull request [pipenv]'
+      if: steps.detect-changes.outputs.changed == 'true'
+      id: pipenv-change
+      # yamllint disable rule:line-length
+      uses: peter-evans/create-pull-request@271a8d0340265f705b14b6d32b9829c1cb33d45e # v7.0.8
+      env:
+        GITHUB_TOKEN: ${{ inputs.token }}
+      with:
+        token: ${{ inputs.token }}
+        commit-message: ${{ inputs.message }}
+        signoff: ${{ inputs.sign-off-commit }}
+        sign-commits: ${{ inputs.sign-commits }}
+        branch: dep/update-pipfile-lock
+        delete-branch: true
+        title: ${{ inputs.message }}
+        body: |
+          Update locked dependencies.
+
+          ## Update summary
+
+          ${{ steps.pipenv.outputs.OUTPUT }}
+
+          *Auto-generated by [python-dependencies-update-action][1]*
+
+          [1]: https://github.com/lfreleng-actions/python-dependencies-update-action
+        labels: |
+          automated pr
+        draft: false
+
+    - name: 'Summary output'
+      # yamllint disable rule:line-length
+      if: steps.pdm-change.outputs.pull-request-url != '' || steps.pipenv-change.outputs.pull-request-url != ''
+      shell: bash
+      run: |
+        # Summary output
+        echo '# Python Dependency Updates ♻️' >> "$GITHUB_STEP_SUMMARY"
+        if [ -n "${{ steps.pdm-change.outputs.pull-request-url }}" ]; then
+          echo "Raised pull request: [${{ steps.pdm-change.outputs.pull-request-number }}](${{ steps.pdm-change.outputs.pull-request-url }})" \
+            >> "$GITHUB_STEP_SUMMARY"
+          echo "Raised pull request: ${{ steps.pdm-change.outputs.pull-request-url }} 🔗"
+        fi
+        if [ -n "${{ steps.pipenv-change.outputs.pull-request-url }}" ]; then
+          echo "Raised pull request: [${{ steps.pipenv-change.outputs.pull-request-number }}](${{ steps.pipenv-change.outputs.pull-request-url }})" \
+            >> "$GITHUB_STEP_SUMMARY"
+          echo "Raised pull request: ${{ steps.pipenv-change.outputs.pull-request-url }} 🔗"
+        fi
