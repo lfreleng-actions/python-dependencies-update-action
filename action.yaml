@@ -59,7 +59,7 @@ runs:
     - name: 'Check for file: pyproject.toml'
       id: pyproject-toml
       # yamllint disable-line rule:line-length
-      uses: lfreleng-actions/path-check-action@594fa4a73651e3e869a4829397e878932f7db32c # v0.1.4
+      uses: lfreleng-actions/path-check-action@aa7dabfa92e50e31a0f091dd3e2741692e8dde07 # v0.1.5
       with:
         path: "${{ inputs.path_prefix }}/pyproject.toml"
 
@@ -73,7 +73,7 @@ runs:
     - name: 'Check for file: pdm.lock'
       id: pdm-lock
       # yamllint disable-line rule:line-length
-      uses: lfreleng-actions/path-check-action@594fa4a73651e3e869a4829397e878932f7db32c # v0.1.4
+      uses: lfreleng-actions/path-check-action@aa7dabfa92e50e31a0f091dd3e2741692e8dde07 # v0.1.5
       with:
         path: "${{ inputs.path_prefix }}/pdm.lock"
 
@@ -92,7 +92,7 @@ runs:
     - name: 'Check for file: Pipfile'
       id: pipfile
       # yamllint disable-line rule:line-length
-      uses: lfreleng-actions/path-check-action@594fa4a73651e3e869a4829397e878932f7db32c # v0.1.4
+      uses: lfreleng-actions/path-check-action@aa7dabfa92e50e31a0f091dd3e2741692e8dde07 # v0.1.5
       with:
         path: "${{ inputs.path_prefix }}/Pipfile"
 
