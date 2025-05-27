@@ -19,7 +19,7 @@ inputs:
   message:
     description: 'Commit message and pull request title'
     required: false
-    default: 'chore: Update Python dependencies'
+    default: 'Chore: Update Python dependencies'
   sign-off-commit:
     description: 'Whether commit message contains signed-off-by'
     required: false
