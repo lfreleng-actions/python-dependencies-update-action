@@ -10,8 +10,12 @@ inputs:
   path_prefix:
     description: 'Directory location containing project code'
     required: false
-    type: string
     default: '.'
+  update_method:
+    # Valid options: auto|uv|poetry|pdm|pip
+    description: 'Tool/method used to update dependencies'
+    required: false
+    default: 'auto'
   token:
     description: "Github token with the required permissions"
     required: false
@@ -23,21 +27,19 @@ inputs:
   sign-off-commit:
     description: 'Whether commit message contains signed-off-by'
     required: false
-    default: true
+    default: 'true'
   sign-commits:
     description: 'Sign commits as github-actions[bot]'
     required: false
-    default: true
+    default: 'true'
   exit_on_fail:
     description: 'Exits with error status if no Python code found'
-    type: 'boolean'
     required: false
-    default: false
+    default: 'false'
   no_checkout:
     description: 'Do not checkout local repository; used for testing'
-    type: 'boolean'
     required: false
-    default: false
+    default: 'false'
 
 runs:
   using: 'composite'
@@ -46,7 +48,7 @@ runs:
     - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
       if: inputs.no_checkout != 'true'
 
-    - name: "Verify path prefix"
+    - name: "Verify directory path to project"
       if: inputs.path_prefix != '.'
       shell: bash
       run: |
@@ -55,6 +57,13 @@ runs:
           echo "Error: invalid path/prefix to project directory ❌"
           exit 1
         fi
+
+    - name: 'Check for file: Pipfile'
+      id: pipfile
+      # yamllint disable-line rule:line-length
+      uses: lfreleng-actions/path-check-action@aa7dabfa92e50e31a0f091dd3e2741692e8dde07 # v0.1.5
+      with:
+        path: "${{ inputs.path_prefix }}/Pipfile"
 
     - name: 'Check for file: pyproject.toml'
       id: pyproject-toml
@@ -70,31 +79,50 @@ runs:
       with:
         python-version-file: "${{ inputs.path_prefix }}/pyproject.toml"
 
-    - name: 'Check for file: pdm.lock'
-      id: pdm-lock
-      # yamllint disable-line rule:line-length
-      uses: lfreleng-actions/path-check-action@aa7dabfa92e50e31a0f091dd3e2741692e8dde07 # v0.1.5
-      with:
-        path: "${{ inputs.path_prefix }}/pdm.lock"
+    - name: 'Initialize tracking variables'
+      shell: bash
+      run: |
+        # Initialize tracking variables for dependency updates
+        echo "TOOLS_USED=" >> $GITHUB_ENV
+        echo "UPDATE_SUMMARY=" >> $GITHUB_ENV
+        echo "CHANGES_DETECTED=false" >> $GITHUB_ENV
 
-    # This step used for first run, where pdm.lock file is absent
-    # But PDM is referenced as desired backend in pyproject.toml
-    - name: 'Check for PDM stanza: pyproject.toml'
-      id: pdm-grep
-      # yamllint disable-line rule:line-length
-      uses: lfreleng-actions/file-grep-regex-action@64fbf6bd3315530c6819e16c5b065e3bfc4f16d9 # v0.1.3
-      with:
-        flags: ''
-        regex: 'tool.pdm'
-        filename: "${{ inputs.path_prefix }}/pyproject.toml"
-        no_fail: 'true'
+        # Generate unique delimiter for multiline environment variables
+        DELIMITER="UPDATE_SUMMARY_END_$(date +%s)_${RANDOM}"
+        echo "UPDATE_SUMMARY_DELIMITER=${DELIMITER}" >> $GITHUB_ENV
 
-    - name: 'Check for file: Pipfile'
-      id: pipfile
-      # yamllint disable-line rule:line-length
-      uses: lfreleng-actions/path-check-action@aa7dabfa92e50e31a0f091dd3e2741692e8dde07 # v0.1.5
-      with:
-        path: "${{ inputs.path_prefix }}/Pipfile"
+        # Create reusable function script for dependency updates
+        TEMP_SCRIPT=$(mktemp)
+        echo "TEMP_SCRIPT=$TEMP_SCRIPT" >> $GITHUB_ENV
+        cat > "$TEMP_SCRIPT" << 'SCRIPT_EOF'
+        #!/bin/bash
+        # Reusable function for appending update summary
+        append_update_summary() {
+          local tool_name="$1"
+          local output="$2"
+
+          {
+            echo "UPDATE_SUMMARY<<${UPDATE_SUMMARY_DELIMITER}"
+            echo "${UPDATE_SUMMARY}**${tool_name} Updates:**"
+            echo "${output}"
+            echo ""
+            echo "${UPDATE_SUMMARY_DELIMITER}"
+          } >> $GITHUB_ENV
+        }
+
+        # Reusable function for adding tools to TOOLS_USED
+        add_tool_used() {
+          local tool_name="$1"
+          if [ -z "${TOOLS_USED}" ]; then
+            echo "TOOLS_USED=${tool_name}" >> $GITHUB_ENV
+          else
+            echo "TOOLS_USED=${TOOLS_USED}, ${tool_name}" >> $GITHUB_ENV
+          fi
+        }
+        SCRIPT_EOF
+        chmod +x "$TEMP_SCRIPT"
+
+    ### Check for project files ###
 
     - name: 'Python project files NOT found'
       # yamllint disable-line rule:line-length
@@ -115,47 +143,193 @@ runs:
             >> "$GITHUB_STEP_SUMMARY"
         fi
 
-    - name: 'Update Python dependencies [pdm]'
+    ### Check for presence of lock files ###
+
+    - name: 'Check for file: uv.lock'
+      id: uv-lock
       # yamllint disable-line rule:line-length
-      if: steps.pdm-lock.outputs.type == 'file' || steps.pdm-grep.outputs.extracted_string != ''
-      id: pdm-change
-      # yamllint disable-line rule:line-length
-      uses: pdm-project/update-deps-action@22852fcff9a131d732730e8db92cc9502643a260 # v1.12
+      uses: lfreleng-actions/path-check-action@aa7dabfa92e50e31a0f091dd3e2741692e8dde07 # v0.1.5
       with:
-        sign-off-commit: "true"
-        token: ${{ inputs.token }}
-        commit-message: ${{ inputs.message }}
-        pr-title: ${{ inputs.message }}
-        update-strategy: eager
-        install-plugins: "false"
+        path: "${{ inputs.path_prefix }}/uv.lock"
+
+    - name: 'Check for file: pdm.lock'
+      id: pdm-lock
+      # yamllint disable-line rule:line-length
+      uses: lfreleng-actions/path-check-action@aa7dabfa92e50e31a0f091dd3e2741692e8dde07 # v0.1.5
+      with:
+        path: "${{ inputs.path_prefix }}/pdm.lock"
+
+    - name: 'Check for file: poetry.lock'
+      id: poetry-lock
+      # yamllint disable-line rule:line-length
+      uses: lfreleng-actions/path-check-action@aa7dabfa92e50e31a0f091dd3e2741692e8dde07 # v0.1.5
+      with:
+        path: "${{ inputs.path_prefix }}/poetry.lock"
+
+    # This step used for first run, where pdm.lock file is absent
+    # But PDM is referenced as desired backend in pyproject.toml
+    - name: 'Check for PDM stanza: pyproject.toml'
+      id: pdm-grep
+      # yamllint disable-line rule:line-length
+      uses: lfreleng-actions/file-grep-regex-action@64fbf6bd3315530c6819e16c5b065e3bfc4f16d9 # v0.1.3
+      with:
+        flags: ''
+        regex: 'tool.pdm'
+        filename: "${{ inputs.path_prefix }}/pyproject.toml"
+        no_fail: 'true'
+
+    - name: 'Check for Poetry stanza: pyproject.toml'
+      id: poetry-grep
+      # yamllint disable-line rule:line-length
+      uses: lfreleng-actions/file-grep-regex-action@64fbf6bd3315530c6819e16c5b065e3bfc4f16d9 # v0.1.3
+      with:
+        flags: ''
+        regex: 'tool.poetry'
+        filename: "${{ inputs.path_prefix }}/pyproject.toml"
+        no_fail: 'true'
+
+    - name: 'Validate update method'
+      if: inputs.update_method != 'auto'
+      shell: bash
+      run: |
+        # Validate that requested tool can be used
+        case "${{ inputs.update_method }}" in
+          uv)
+            if [ "${{ steps.uv-lock.outputs.type }}" != "file" ]; then
+              echo "Error: UV requested but uv.lock not found ❌"
+              exit 1
+            fi
+            ;;
+          poetry)
+            if [ "${{ steps.poetry-lock.outputs.type }}" != "file" ] && \
+               [ -z "${{ steps.poetry-grep.outputs.extracted_string }}" ]; then
+              echo "Error: Poetry requested but no Poetry project found ❌"
+              exit 1
+            fi
+            ;;
+          pdm)
+            if [ "${{ steps.pdm-lock.outputs.type }}" != "file" ] && \
+               [ -z "${{ steps.pdm-grep.outputs.extracted_string }}" ]; then
+              echo "Error: PDM requested but no PDM project found ❌"
+              exit 1
+            fi
+            ;;
+          pip)
+            if [ "${{ steps.pipfile.outputs.type }}" != "file" ]; then
+              echo "Error: Pipenv requested but Pipfile not found ❌"
+              exit 1
+            fi
+            ;;
+          *)
+            echo "Error: Invalid update_method '${{ inputs.update_method }}' ❌"
+            exit 1
+            ;;
+        esac
+
+    - name: 'Update Python dependencies [uv]'
+      id: uv
+      # yamllint disable-line rule:line-length
+      if: (inputs.update_method == 'auto' && steps.uv-lock.outputs.type == 'file') || inputs.update_method == 'uv'
+      shell: bash
+      run: |
+        # Source reusable functions, invoke uv
+        source "$TEMP_SCRIPT"
+
+        # Update Python dependencies [uv]
+        pip install --upgrade -q uv
+        cd ${{ inputs.path_prefix }}
+        OUTPUT=$(uv lock --upgrade 2>&1)
+        UV_EXIT_CODE=$?
+        if [[ $UV_EXIT_CODE -ne 0 ]]; then
+          echo "❌ 'uv lock --upgrade' failed with exit code $UV_EXIT_CODE"
+          echo "Output:"
+          echo "${OUTPUT}"
+          exit $UV_EXIT_CODE
+        fi
+        add_tool_used "uv"
+        append_update_summary "UV" "${OUTPUT}"
+        if [[ -n "$(git status --porcelain)" ]]; then
+          echo "CHANGES_DETECTED=true" >> $GITHUB_ENV
+        fi
+
+    - name: 'Update Python dependencies [poetry]'
+      id: poetry
+      # yamllint disable-line rule:line-length
+      if: (inputs.update_method == 'auto' && (steps.poetry-lock.outputs.type == 'file' || steps.poetry-grep.outputs.extracted_string != '')) || inputs.update_method == 'poetry'
+      shell: bash
+      run: |
+        # Source reusable functions, invoke poetry
+        source "$TEMP_SCRIPT"
+
+        # Update Python dependencies [poetry]
+        pip install --upgrade -q poetry
+        cd ${{ inputs.path_prefix }}
+        OUTPUT=$(poetry update 2>&1)
+        STATUS=$?
+        if [ $STATUS -ne 0 ]; then
+          echo "❌ poetry update failed:"
+          echo "${OUTPUT}"
+          exit $STATUS
+        fi
+        add_tool_used "poetry"
+        append_update_summary "Poetry" "${OUTPUT}"
+        if [[ -n "$(git status --porcelain)" ]]; then
+          echo "CHANGES_DETECTED=true" >> $GITHUB_ENV
+        fi
+
+    - name: 'Update Python dependencies [pdm]'
+      id: pdm
+      # yamllint disable-line rule:line-length
+      if: (inputs.update_method == 'auto' && (steps.pdm-lock.outputs.type == 'file' || steps.pdm-grep.outputs.extracted_string != '')) || inputs.update_method == 'pdm'
+      shell: bash
+      run: |
+        # Source reusable functions, invoke pdm
+        source "$TEMP_SCRIPT"
+
+        # Update Python dependencies [pdm]
+        pip install --upgrade -q pdm
+        cd ${{ inputs.path_prefix }}
+        OUTPUT=$(pdm update 2>&1)
+        STATUS=$?
+        if [[ $STATUS -ne 0 ]]; then
+          echo "❌ pdm update failed:"
+          echo "${OUTPUT}"
+          exit $STATUS
+        fi
+        add_tool_used "pdm"
+        append_update_summary "PDM" "${OUTPUT}"
+        if [[ -n "$(git status --porcelain)" ]]; then
+          echo "CHANGES_DETECTED=true" >> $GITHUB_ENV
+        fi
 
     - name: 'Update Python dependencies [pipenv]'
       id: pipenv
-      if: steps.pipfile.outputs.type == 'file'
+      # yamllint disable-line rule:line-length
+      if: (inputs.update_method == 'auto' && steps.pipfile.outputs.type == 'file') || inputs.update_method == 'pip'
       shell: bash
       run: |
+        # Source reusable functions, invoke pipenv
+        source "$TEMP_SCRIPT"
+
         # Update Python dependencies [pipenv]
         pip install --upgrade -q pipenv
         cd ${{ inputs.path_prefix }}
-        OUTPUT=$(pipenv lock)
-
-    - name: 'Detect repository changes'
-      id: detect-changes
-      if: steps.pipfile.outputs.type == 'file'
-      shell: bash
-      run: |
-        # Detect repository changes
-        if [[ `git status --porcelain` ]]; then
-          echo "changed=true" >> $GITHUB_OUTPUT
-          echo "Dependency updates required ✅"
-        else
-          echo "changed=false" >> $GITHUB_OUTPUT
-          echo "No dependency updates required 💬"
+        OUTPUT=$(pipenv lock 2>&1)
+        EXIT_CODE=$?
+        if [[ $EXIT_CODE -ne 0 ]]; then
+          echo "pipenv lock failed with the following error:" >&2
+          echo "${OUTPUT}" >&2
+          exit $EXIT_CODE
+        fi
+        add_tool_used "pipenv"
+        append_update_summary "Pipenv" "${OUTPUT}"
+        if [[ -n "$(git status --porcelain)" ]]; then
+          echo "CHANGES_DETECTED=true" >> $GITHUB_ENV
         fi
 
-    - name: 'Create pull request [pipenv]'
-      if: steps.detect-changes.outputs.changed == 'true'
-      id: pipenv-change
+    - name: 'Create unified pull request'
+      if: env.CHANGES_DETECTED == 'true'
+      id: unified-change
       # yamllint disable rule:line-length
       uses: peter-evans/create-pull-request@271a8d0340265f705b14b6d32b9829c1cb33d45e # v7.0.8
       env:
@@ -165,15 +339,15 @@ runs:
         commit-message: ${{ inputs.message }}
         signoff: ${{ inputs.sign-off-commit }}
         sign-commits: ${{ inputs.sign-commits }}
-        branch: dep/update-pipfile-lock
+        branch: dep/update-dependencies
         delete-branch: true
         title: ${{ inputs.message }}
         body: |
-          Update locked dependencies.
+          Update locked dependencies using: ${{ env.TOOLS_USED }}
 
-          ## Update summary
+          ## Update Summary
 
-          ${{ steps.pipenv.outputs.OUTPUT }}
+          ${{ env.UPDATE_SUMMARY }}
 
           *Auto-generated by [python-dependencies-update-action][1]*
 
@@ -183,19 +357,12 @@ runs:
         draft: false
 
     - name: 'Summary output'
-      # yamllint disable rule:line-length
-      if: steps.pdm-change.outputs.pull-request-url != '' || steps.pipenv-change.outputs.pull-request-url != ''
+      if: steps.unified-change.outputs.pull-request-url != ''
       shell: bash
       run: |
         # Summary output
         echo '# Python Dependency Updates ♻️' >> "$GITHUB_STEP_SUMMARY"
-        if [ -n "${{ steps.pdm-change.outputs.pull-request-url }}" ]; then
-          echo "Raised pull request: [${{ steps.pdm-change.outputs.pull-request-number }}](${{ steps.pdm-change.outputs.pull-request-url }})" \
-            >> "$GITHUB_STEP_SUMMARY"
-          echo "Raised pull request: ${{ steps.pdm-change.outputs.pull-request-url }} 🔗"
-        fi
-        if [ -n "${{ steps.pipenv-change.outputs.pull-request-url }}" ]; then
-          echo "Raised pull request: [${{ steps.pipenv-change.outputs.pull-request-number }}](${{ steps.pipenv-change.outputs.pull-request-url }})" \
-            >> "$GITHUB_STEP_SUMMARY"
-          echo "Raised pull request: ${{ steps.pipenv-change.outputs.pull-request-url }} 🔗"
-        fi
+        PR_NUM="${{ steps.unified-change.outputs.pull-request-number }}"
+        PR_URL="${{ steps.unified-change.outputs.pull-request-url }}"
+        echo "Raised pull request: [${PR_NUM}](${PR_URL})" >> "$GITHUB_STEP_SUMMARY"
+        echo "Raised pull request: ${PR_URL} 🔗"

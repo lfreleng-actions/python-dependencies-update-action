@@ -62,9 +62,7 @@ jobs:
       # Run a valid test against it
       - name: "Run action: ${{ github.repository }}"
         uses: ./
-        # PDM project action does not work when project is not local repository
-        # This will need to be directly tested/consumed somewhere downstream
-        continue-on-error: true
+        continue-on-error: true  # Organisation level permissions block PR
         with:
           path_prefix: "test-python-project"
           # Flag needed to prevent local/test repository checkout conflicts
