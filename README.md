@@ -7,7 +7,7 @@
 
 Updates the dependencies of a Python project and raises pull requests in the
 repository containing the required changes/updates. Works for projects using
-the PDM project tooling, or those described using a "Pipfile".
+UV, Poetry, PDM project tooling, or those described using a "Pipfile".
 
 Compatible with modern Python projects described by: pyproject.toml
 
@@ -35,6 +35,7 @@ steps:
 | --------------- | -------- | ------------------------------------------------ |
 | token           | True     | Github token with the required permissions       |
 | path_prefix     | False    | Directory location containing project code       |
+| update_method   | False    | Tool/method used to update dependencies          |
 | message         | False    | Commit message and pull request title            |
 | sign-off-commit | False    | Whether commit message contains signed-off-by    |
 | sign-commits    | False    | Sign commits as github-actions[bot]              |
@@ -50,6 +51,7 @@ steps:
 | Variable Name   | Default                                     |
 | --------------- |-------------------------------------------- |
 | path_prefix     | '.' '(current working directory)            |
+| update_method   | 'auto' (detect and use all available tools) |
 | message         | 'chore: Update Python dependencies'         |
 | sign-off-commit | true                                        |
 | sign-commits    | true                                        |
@@ -65,19 +67,43 @@ The token passed as input requires:
 - repository-projects: write
 - contents: write
 
+## update_method Options
+
+| Value   | Description                                         |
+| ------- | --------------------------------------------------- |
+| auto    | Auto-detect and run all available tools (default)  |
+| uv      | Use UV package manager (requires uv.lock)          |
+| poetry  | Use Poetry (requires poetry.lock or tool.poetry)   |
+| pdm     | Use PDM (requires pdm.lock or tool.pdm)            |
+| pip     | Use Pipenv (requires Pipfile)                      |
+
 ## Implementation Details
 
-For PDM based projects, leverages the following upstream action:
+The action supports Python dependency management tools:
 
-[pdm-project/update-deps-action](https://github.com/pdm-project/update-deps-action)
+**UV**: Modern, fast Python package installer and resolver
 
-Invoked when either "tool.pdm" declared in the pyproject.toml file, or when a
-"pdm.lock" file exists in the repository.
+- Triggered by: `uv.lock` file exists
+- Command: `uv lock --upgrade`
 
-For projects containing a "Pipfile", will invoke the command:
+**Poetry**: Popular Python dependency management tool
 
-`pipenv lock`
+- Triggered by: `poetry.lock` file exists OR `tool.poetry` in pyproject.toml
+- Command: `poetry update`
 
-In both cases, the following upstream action raises a pull request:
+**PDM**: Modern Python package manager supporting PEP 582
+
+- Triggered by: `pdm.lock` file exists OR `tool.pdm` in pyproject.toml
+- Command: `pdm update`
+
+**Pipenv**: Traditional Python package manager using Pipfile
+
+- Triggered by: `Pipfile` exists
+- Command: `pipenv lock`
+
+When `update_method: auto` (default), all detected tools run in priority
+order. When you specify a tool, that tool executes.
+
+The action consolidates all dependency updates into a single pull request using:
 
 [peter-evans/create-pull-request](https://github.com/peter-evans/create-pull-request)
