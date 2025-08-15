@@ -31,16 +31,17 @@ steps:
 
 <!-- markdownlint-disable MD013 -->
 
-| Variable Name   | Required | Description                                      |
-| --------------- | -------- | ------------------------------------------------ |
-| token           | True     | Github token with the required permissions       |
-| path_prefix     | False    | Directory location containing project code       |
-| update_method   | False    | Tool/method used to update dependencies          |
-| message         | False    | Commit message and pull request title            |
-| sign-off-commit | False    | Whether commit message contains signed-off-by    |
-| sign-commits    | False    | Sign commits as github-actions[bot]              |
-| exit_on_fail    | False    | Exit with error if no Python project code found  |
-| no_checkout     | False    | Don't perform a checkout of the local repository |
+| Variable Name   | Required | Description                                        |
+| --------------- | -------- | -------------------------------------------------- |
+| token           | True     | Github token with the required permissions         |
+| path_prefix     | False    | Directory location containing project code         |
+| update_method   | False    | Tool/method used to update dependencies            |
+| message         | False    | Commit message and pull request title              |
+| sign-off-commit | False    | Whether commit message contains signed-off-by      |
+| sign-commits    | False    | Sign commits as github-actions[bot]                |
+| exit_on_fail    | False    | Exit with error if no Python project code found    |
+| no_checkout     | False    | Don't perform a checkout of the local repository   |
+| labels          | False    | Labels to apply to the pull request (one per line) |
 
 <!-- markdownlint-enable MD013 -->
 
@@ -48,13 +49,14 @@ steps:
 
 <!-- markdownlint-disable MD013 -->
 
-| Variable Name   | Default                                     |
-| --------------- |-------------------------------------------- |
-| path_prefix     | '.' '(current working directory)            |
-| update_method   | 'auto' (detect and use all available tools) |
-| message         | 'chore: Update Python dependencies'         |
-| sign-off-commit | true                                        |
-| sign-commits    | true                                        |
+| Variable Name   | Default                             |
+| --------------- | ----------------------------------- |
+| path_prefix     | '.' '                               |
+| update_method   | 'auto'                              |
+| message         | 'Chore: Update Python dependencies' |
+| sign-off-commit | true                                |
+| sign-commits    | true                                |
+| labels          | ''                                  |
 
 <!-- markdownlint-enable MD013 -->
 
@@ -67,15 +69,20 @@ The token passed as input requires:
 - repository-projects: write
 - contents: write
 
+**Note**: If you use the `labels` input to apply labels to pull requests,
+ensure the labels already exist in your repository. The action does not create
+new labels and will fail if trying to apply non-existent labels without the
+necessary permissions.
+
 ## update_method Options
 
-| Value   | Description                                         |
-| ------- | --------------------------------------------------- |
-| auto    | Auto-detect and run all available tools (default)  |
-| uv      | Use UV package manager (requires uv.lock)          |
-| poetry  | Use Poetry (requires poetry.lock or tool.poetry)   |
-| pdm     | Use PDM (requires pdm.lock or tool.pdm)            |
-| pip     | Use Pipenv (requires Pipfile)                      |
+| Value   | Description                                       |
+| ------- | ------------------------------------------------- |
+| auto    | Auto-detect and run all available tools (default) |
+| uv      | Use UV package manager (requires uv.lock)         |
+| poetry  | Use Poetry (requires poetry.lock or tool.poetry)  |
+| pdm     | Use PDM (requires pdm.lock or tool.pdm)           |
+| pip     | Use Pipenv (requires Pipfile)                     |
 
 ## Implementation Details
 
@@ -107,3 +114,26 @@ order. When you specify a tool, that tool executes.
 The action consolidates all dependency updates into a single pull request using:
 
 [peter-evans/create-pull-request](https://github.com/peter-evans/create-pull-request)
+
+## Using Labels
+
+The `labels` input allows you to apply labels to the generated pull request.
+
+Provide one label per line, as demonstrated in the example below:
+
+```yaml
+steps:
+  - name: Update Python dependencies
+    uses: lfreleng-actions/python-dependencies-update-action@main
+    with:
+      token: ${{ secrets.GITHUB_TOKEN }}
+      labels: |
+        automated
+        dependencies
+        python
+```
+
+If you don't specify any labels, the pull request will have no labels. This
+avoids failures that can occur trying to apply non-existent
+labels, and provides for usage in repositories where you may not have the
+permissions required to add them.
