@@ -336,7 +336,7 @@ runs:
       if: env.CHANGES_DETECTED == 'true'
       id: unified-change
       # yamllint disable rule:line-length
-      uses: peter-evans/create-pull-request@271a8d0340265f705b14b6d32b9829c1cb33d45e # v7.0.8
+      uses: peter-evans/create-pull-request@84ae59a2cdc2258d6fa0732dd66352dddae2a412 # v7.0.9
       env:
         GITHUB_TOKEN: ${{ inputs.token }}
       with:
