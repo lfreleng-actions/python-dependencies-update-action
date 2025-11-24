@@ -66,14 +66,14 @@ runs:
     - name: 'Check for file: Pipfile'
       id: pipfile
       # yamllint disable-line rule:line-length
-      uses: lfreleng-actions/path-check-action@aa7dabfa92e50e31a0f091dd3e2741692e8dde07 # v0.1.5
+      uses: lfreleng-actions/path-check-action@9606e61c870025bc956e63156d1d55c5df54426c # v0.2.0
       with:
         path: "${{ inputs.path_prefix }}/Pipfile"
 
     - name: 'Check for file: pyproject.toml'
       id: pyproject-toml
       # yamllint disable-line rule:line-length
-      uses: lfreleng-actions/path-check-action@aa7dabfa92e50e31a0f091dd3e2741692e8dde07 # v0.1.5
+      uses: lfreleng-actions/path-check-action@9606e61c870025bc956e63156d1d55c5df54426c # v0.2.0
       with:
         path: "${{ inputs.path_prefix }}/pyproject.toml"
 
@@ -153,21 +153,21 @@ runs:
     - name: 'Check for file: uv.lock'
       id: uv-lock
       # yamllint disable-line rule:line-length
-      uses: lfreleng-actions/path-check-action@aa7dabfa92e50e31a0f091dd3e2741692e8dde07 # v0.1.5
+      uses: lfreleng-actions/path-check-action@9606e61c870025bc956e63156d1d55c5df54426c # v0.2.0
       with:
         path: "${{ inputs.path_prefix }}/uv.lock"
 
     - name: 'Check for file: pdm.lock'
       id: pdm-lock
       # yamllint disable-line rule:line-length
-      uses: lfreleng-actions/path-check-action@aa7dabfa92e50e31a0f091dd3e2741692e8dde07 # v0.1.5
+      uses: lfreleng-actions/path-check-action@9606e61c870025bc956e63156d1d55c5df54426c # v0.2.0
       with:
         path: "${{ inputs.path_prefix }}/pdm.lock"
 
     - name: 'Check for file: poetry.lock'
       id: poetry-lock
       # yamllint disable-line rule:line-length
-      uses: lfreleng-actions/path-check-action@aa7dabfa92e50e31a0f091dd3e2741692e8dde07 # v0.1.5
+      uses: lfreleng-actions/path-check-action@9606e61c870025bc956e63156d1d55c5df54426c # v0.2.0
       with:
         path: "${{ inputs.path_prefix }}/poetry.lock"
 
