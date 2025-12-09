@@ -28,7 +28,7 @@ jobs:
       contents: read
     steps:
       - name: 'Checkout repository'
-        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
       # Test against a directory containing no Python project code
       # This will not do anything, but not fail either
@@ -54,7 +54,7 @@ jobs:
 
       # Checkout the test Python project
       - name: "Checkout sample project repository"
-        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           repository: "lfreleng-actions/test-python-project"
           path: "test-python-project"
