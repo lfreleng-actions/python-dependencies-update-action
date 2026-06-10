@@ -15,3 +15,5 @@ updates:
       interval: "weekly"
     commit-message:
       prefix: "Chore"
+    cooldown:
+      default-days: 7
