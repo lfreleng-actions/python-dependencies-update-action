@@ -3,7 +3,16 @@
 # SPDX-FileCopyrightText: 2025 The Linux Foundation
 
 ci:
-  autofix_commit_msg: "Chore: pre-commit autoupdate"
+  # pre-commit.ci sandbox prevents network calls; disable gha-workflow-linter
+  skip: [gha-workflow-linter]
+  autofix_commit_msg: |
+    Chore: pre-commit autofixes
+
+    Signed-off-by: pre-commit-ci[bot] <pre-commit-ci@users.noreply.github.com>
+  autoupdate_commit_msg: |
+    Chore: pre-commit autoupdate
+
+    Signed-off-by: pre-commit-ci[bot] <pre-commit-ci@users.noreply.github.com>
 
 exclude: "^docs/conf.py"
 
@@ -43,7 +52,7 @@ repos:
         types: [yaml]
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: 22f0422809455ec89ffdcf5a00170ba816e42ddb  # frozen: v0.15.16
+    rev: 3b3f7c3f57fe9925356faf5fe6230835138be230  # frozen: v0.15.17
     hooks:
       - id: ruff
         files: ^(scripts|tests|custom_components)/.+\.py$
@@ -90,3 +99,29 @@ repos:
     rev: 2ccb47ff45ad361a21071a7eedda4c37e6ae8c5a  # frozen: v2.4.2
     hooks:
       - id: codespell
+
+  # Requires a mirror, primary repo lacks .pre-commit-hooks.yaml
+  - repo: https://github.com/DetachHead/basedpyright-prek-mirror
+    rev: 5f6f2cb9fa8aec15105f77fd21e8dfe29838b16d  # frozen: 1.39.8
+    hooks:
+      - id: basedpyright
+
+  - repo: https://github.com/lfreleng-actions/gha-workflow-linter
+    rev: 1a307fd9eed98268b11300ab86b1a107e1d3d1ae  # frozen: v1.1.1
+    hooks:
+      - id: gha-workflow-linter
+
+  - repo: https://github.com/python-jsonschema/check-jsonschema
+    rev: 8ef330cbb7204d388aa7a620f9549bcea8009663  # frozen: 0.37.3
+    hooks:
+      - id: check-github-actions
+      - id: check-github-workflows
+      - id: check-jsonschema
+        name: Check GitHub Workflows set timeout-minutes
+        args:
+          - --builtin-schema
+          - github-workflows-require-timeout
+        files: ^\.github/workflows/[^/]+$
+        types:
+          - yaml
+      - id: check-readthedocs
