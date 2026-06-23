@@ -52,13 +52,17 @@ runs:
     # yamllint disable-line rule:line-length
     - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       if: inputs.no_checkout != 'true'
+      with:
+        persist-credentials: false
 
     - name: "Verify directory path to project"
       if: inputs.path_prefix != '.'
       shell: bash
+      env:
+        PATH_PREFIX: ${{ inputs.path_prefix }}
       run: |
         # Verify path prefix is valid directory path
-        if [ ! -d "${{ inputs.path_prefix }}" ]; then
+        if [ ! -d "$PATH_PREFIX" ]; then
           echo "Error: invalid path/prefix to project directory ❌"
           exit 1
         fi
@@ -86,7 +90,14 @@ runs:
 
     - name: 'Initialize tracking variables'
       shell: bash
-      run: |
+      # This step deliberately accumulates cross-step state
+      # (TOOLS_USED, UPDATE_SUMMARY, CHANGES_DETECTED) in $GITHUB_ENV so
+      # the mutually exclusive update steps can append results consumed
+      # later by the create-pull-request step. Every key is a constant
+      # literal and the only externally influenced value (tool output)
+      # is wrapped with a randomized heredoc delimiter, so the writes
+      # cannot smuggle additional environment variables.
+      run: | # zizmor: ignore[github-env]
         # Initialize tracking variables for dependency updates
         echo "TOOLS_USED=" >> $GITHUB_ENV
         echo "UPDATE_SUMMARY=" >> $GITHUB_ENV
@@ -133,10 +144,12 @@ runs:
       # yamllint disable-line rule:line-length
       if: steps.pipfile.outputs.type != 'file' && steps.pyproject-toml.outputs.type != 'file'
       shell: bash
+      env:
+        EXIT_ON_FAIL: ${{ inputs.exit_on_fail }}
       run: |
         # Python project files NOT found
         echo '# Python Dependency Updates ♻️' >> "$GITHUB_STEP_SUMMARY"
-        if [ "${{ inputs.exit_on_fail }}" = "true" ]; then
+        if [ "$EXIT_ON_FAIL" = "true" ]; then
           echo "Error: Python project files NOT found ❌" \
             >> "$GITHUB_STEP_SUMMARY"
           echo "Error: Python project files NOT found ❌"
@@ -196,37 +209,45 @@ runs:
     - name: 'Validate update method'
       if: inputs.update_method != 'auto'
       shell: bash
+      env:
+        UPDATE_METHOD: ${{ inputs.update_method }}
+        UV_LOCK_TYPE: ${{ steps.uv-lock.outputs.type }}
+        POETRY_LOCK_TYPE: ${{ steps.poetry-lock.outputs.type }}
+        POETRY_GREP: ${{ steps.poetry-grep.outputs.extracted_string }}
+        PDM_LOCK_TYPE: ${{ steps.pdm-lock.outputs.type }}
+        PDM_GREP: ${{ steps.pdm-grep.outputs.extracted_string }}
+        PIPFILE_TYPE: ${{ steps.pipfile.outputs.type }}
       run: |
         # Validate that requested tool can be used
-        case "${{ inputs.update_method }}" in
+        case "$UPDATE_METHOD" in
           uv)
-            if [ "${{ steps.uv-lock.outputs.type }}" != "file" ]; then
+            if [ "$UV_LOCK_TYPE" != "file" ]; then
               echo "Error: UV requested but uv.lock not found ❌"
               exit 1
             fi
             ;;
           poetry)
-            if [ "${{ steps.poetry-lock.outputs.type }}" != "file" ] && \
-               [ -z "${{ steps.poetry-grep.outputs.extracted_string }}" ]; then
+            if [ "$POETRY_LOCK_TYPE" != "file" ] && \
+               [ -z "$POETRY_GREP" ]; then
               echo "Error: Poetry requested but no Poetry project found ❌"
               exit 1
             fi
             ;;
           pdm)
-            if [ "${{ steps.pdm-lock.outputs.type }}" != "file" ] && \
-               [ -z "${{ steps.pdm-grep.outputs.extracted_string }}" ]; then
+            if [ "$PDM_LOCK_TYPE" != "file" ] && \
+               [ -z "$PDM_GREP" ]; then
               echo "Error: PDM requested but no PDM project found ❌"
               exit 1
             fi
             ;;
           pip)
-            if [ "${{ steps.pipfile.outputs.type }}" != "file" ]; then
+            if [ "$PIPFILE_TYPE" != "file" ]; then
               echo "Error: Pipenv requested but Pipfile not found ❌"
               exit 1
             fi
             ;;
           *)
-            echo "Error: Invalid update_method '${{ inputs.update_method }}' ❌"
+            echo "Error: Invalid update_method '$UPDATE_METHOD' ❌"
             exit 1
             ;;
         esac
@@ -236,13 +257,15 @@ runs:
       # yamllint disable-line rule:line-length
       if: (inputs.update_method == 'auto' && steps.uv-lock.outputs.type == 'file') || inputs.update_method == 'uv'
       shell: bash
+      env:
+        PATH_PREFIX: ${{ inputs.path_prefix }}
       run: |
         # Source reusable functions, invoke uv
         source "$TEMP_SCRIPT"
 
         # Update Python dependencies [uv]
         pip install --upgrade -q uv
-        cd ${{ inputs.path_prefix }}
+        cd "$PATH_PREFIX"
         OUTPUT=$(uv lock --upgrade 2>&1)
         UV_EXIT_CODE=$?
         if [[ $UV_EXIT_CODE -ne 0 ]]; then
@@ -262,13 +285,15 @@ runs:
       # yamllint disable-line rule:line-length
       if: (inputs.update_method == 'auto' && (steps.poetry-lock.outputs.type == 'file' || steps.poetry-grep.outputs.extracted_string != '')) || inputs.update_method == 'poetry'
       shell: bash
+      env:
+        PATH_PREFIX: ${{ inputs.path_prefix }}
       run: |
         # Source reusable functions, invoke poetry
         source "$TEMP_SCRIPT"
 
         # Update Python dependencies [poetry]
         pip install --upgrade -q poetry
-        cd ${{ inputs.path_prefix }}
+        cd "$PATH_PREFIX"
         OUTPUT=$(poetry update 2>&1)
         STATUS=$?
         if [ $STATUS -ne 0 ]; then
@@ -287,13 +312,15 @@ runs:
       # yamllint disable-line rule:line-length
       if: (inputs.update_method == 'auto' && (steps.pdm-lock.outputs.type == 'file' || steps.pdm-grep.outputs.extracted_string != '')) || inputs.update_method == 'pdm'
       shell: bash
+      env:
+        PATH_PREFIX: ${{ inputs.path_prefix }}
       run: |
         # Source reusable functions, invoke pdm
         source "$TEMP_SCRIPT"
 
         # Update Python dependencies [pdm]
         pip install --upgrade -q pdm
-        cd ${{ inputs.path_prefix }}
+        cd "$PATH_PREFIX"
         OUTPUT=$(pdm update 2>&1)
         STATUS=$?
         if [[ $STATUS -ne 0 ]]; then
@@ -312,13 +339,15 @@ runs:
       # yamllint disable-line rule:line-length
       if: (inputs.update_method == 'auto' && steps.pipfile.outputs.type == 'file') || inputs.update_method == 'pip'
       shell: bash
+      env:
+        PATH_PREFIX: ${{ inputs.path_prefix }}
       run: |
         # Source reusable functions, invoke pipenv
         source "$TEMP_SCRIPT"
 
         # Update Python dependencies [pipenv]
         pip install --upgrade -q pipenv
-        cd ${{ inputs.path_prefix }}
+        cd "$PATH_PREFIX"
         OUTPUT=$(pipenv lock 2>&1)
         EXIT_CODE=$?
         if [[ $EXIT_CODE -ne 0 ]]; then
@@ -363,10 +392,11 @@ runs:
     - name: 'Summary output'
       if: steps.unified-change.outputs.pull-request-url != ''
       shell: bash
+      env:
+        PR_NUM: ${{ steps.unified-change.outputs.pull-request-number }}
+        PR_URL: ${{ steps.unified-change.outputs.pull-request-url }}
       run: |
         # Summary output
         echo '# Python Dependency Updates ♻️' >> "$GITHUB_STEP_SUMMARY"
-        PR_NUM="${{ steps.unified-change.outputs.pull-request-number }}"
-        PR_URL="${{ steps.unified-change.outputs.pull-request-url }}"
         echo "Raised pull request: [${PR_NUM}](${PR_URL})" >> "$GITHUB_STEP_SUMMARY"
         echo "Raised pull request: ${PR_URL} 🔗"
