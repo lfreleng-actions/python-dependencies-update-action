@@ -365,6 +365,12 @@ runs:
       if: env.CHANGES_DETECTED == 'true'
       id: unified-change
       # yamllint disable rule:line-length
+      # zizmor: ignore[superfluous-actions] the action is not a thin
+      # wrapper around 'gh pr create': it stages and commits changes,
+      # reuses an existing branch, force-updates an open pull request
+      # in place rather than opening duplicates, and no-ops when there
+      # is nothing to commit. It is pinned to a commit SHA and tracked
+      # by Dependabot.
       uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
       env:
         GITHUB_TOKEN: ${{ inputs.token }}
