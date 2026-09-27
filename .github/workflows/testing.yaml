@@ -33,19 +33,14 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: 'Checkout repository'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
       # Test against a directory containing no Python project code
       # This will not do anything, but not fail either
       - name: "Running local action: ${{ github.repository }}"
-        uses: ./
+        uses: $/
 
       - name: "Running local action: ${{ github.repository }} [Failure Test]"
         id: failure
-        uses: ./
+        uses: $/
         with:
           # Set flag to prevent the silent failure in initial test above
           exit_on_fail: true
@@ -70,7 +65,7 @@ jobs:
 
       # Run a valid test against it
       - name: "Run action: ${{ github.repository }}"
-        uses: ./
+        uses: $/
         continue-on-error: true  # Organisation level permissions block PR
         with:
           path_prefix: "test-python-project"
