@@ -115,6 +115,10 @@ The action consolidates all dependency updates into a single pull request using:
 
 [peter-evans/create-pull-request](https://github.com/peter-evans/create-pull-request)
 
+The pull request targets the git repository containing `path_prefix`. That is
+the repository at the workspace root, unless `path_prefix` points to a separate
+checkout. That repository must sit inside `$GITHUB_WORKSPACE`.
+
 ## Using Labels
 
 The `labels` input allows you to apply labels to the generated pull request.

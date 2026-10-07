@@ -361,6 +361,40 @@ runs:
           echo "CHANGES_DETECTED=true" >> $GITHUB_ENV
         fi
 
+    # path_prefix may sit in a separate checkout (no_checkout: true), so
+    # raise the pull request in the repository that holds the changes
+    # rather than at the workspace root. create-pull-request takes a
+    # path relative to the workspace, so the repository must be in it.
+    - name: 'Locate repository for pull request'
+      if: env.CHANGES_DETECTED == 'true'
+      id: repository
+      shell: bash
+      env:
+        PATH_PREFIX: ${{ inputs.path_prefix }}
+      run: |
+        # Locate repository for pull request
+        REPOSITORY_PATH=$(git -C "$PATH_PREFIX" rev-parse --show-toplevel)
+        # Compare physical paths in one form: on Windows, git reports
+        # D:/... while bash reports /d/...
+        REPOSITORY_REAL=$(cd "$REPOSITORY_PATH" && pwd -P)
+        WORKSPACE_PATH=$(cd "$GITHUB_WORKSPACE" && pwd -P)
+        case "$REPOSITORY_REAL" in
+          "$WORKSPACE_PATH")
+            RELATIVE_PATH="."
+            ;;
+          "$WORKSPACE_PATH"/*)
+            RELATIVE_PATH="${REPOSITORY_REAL#"$WORKSPACE_PATH"/}"
+            ;;
+          *)
+            echo "Error: repository outside workspace: $REPOSITORY_PATH ❌"
+            exit 1
+            ;;
+        esac
+        {
+          echo "path=${REPOSITORY_PATH}"
+          echo "relative_path=${RELATIVE_PATH}"
+        } >> "$GITHUB_OUTPUT"
+
     - name: 'Create unified pull request'
       if: env.CHANGES_DETECTED == 'true'
       id: unified-change
@@ -376,6 +410,7 @@ runs:
         GITHUB_TOKEN: ${{ inputs.token }}
       with:
         token: ${{ inputs.token }}
+        path: ${{ steps.repository.outputs.relative_path }}
         commit-message: ${{ inputs.message }}
         signoff: ${{ inputs.sign-off-commit }}
         sign-commits: ${{ inputs.sign-commits }}
