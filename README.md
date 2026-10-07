@@ -41,6 +41,7 @@ steps:
 | sign-commits    | False    | Sign commits as github-actions[bot]                |
 | exit_on_fail    | False    | Exit with error if no Python project code found    |
 | no_checkout     | False    | Don't perform a checkout of the local repository   |
+| no_pull_request | False    | Update dependencies without raising a pull request |
 | labels          | False    | Labels to apply to the pull request (one per line) |
 
 <!-- markdownlint-enable MD013 -->
@@ -56,9 +57,18 @@ steps:
 | message         | 'Chore: Update Python dependencies' |
 | sign-off-commit | true                                |
 | sign-commits    | true                                |
+| no_pull_request | false                               |
 | labels          | ''                                  |
 
 <!-- markdownlint-enable MD013 -->
+
+## Outputs
+
+| Variable Name    | Description                                       |
+| ---------------- | ------------------------------------------------- |
+| changes_detected | Whether updating dependencies changed any files   |
+| tools_used       | Comma-separated list of the update tools that ran |
+| repository_path  | Top level of the git repository holding changes   |
 
 ## Token Permissions
 

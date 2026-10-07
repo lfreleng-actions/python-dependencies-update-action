@@ -40,11 +40,26 @@ inputs:
     description: 'Do not checkout local repository; used for testing'
     required: false
     default: 'false'
+  no_pull_request:
+    description: 'Do not raise a pull request; used for testing'
+    required: false
+    default: 'false'
   labels:
     description: 'Labels to apply to the pull request'
     required: false
     # Provide one label per line
     default: ''
+
+outputs:
+  changes_detected:
+    description: 'Whether updating dependencies changed any files'
+    value: ${{ steps.results.outputs.changes_detected }}
+  tools_used:
+    description: 'Comma-separated list of the update tools that ran'
+    value: ${{ steps.results.outputs.tools_used }}
+  repository_path:
+    description: 'Top level of the git repository holding the changes'
+    value: ${{ steps.repository.outputs.path }}
 
 runs:
   using: 'composite'
@@ -361,18 +376,28 @@ runs:
           echo "CHANGES_DETECTED=true" >> $GITHUB_ENV
         fi
 
+    - name: 'Set action outputs'
+      id: results
+      shell: bash
+      run: |
+        # Set action outputs
+        {
+          echo "changes_detected=${CHANGES_DETECTED}"
+          echo "tools_used=${TOOLS_USED}"
+        } >> "$GITHUB_OUTPUT"
+
     # path_prefix may sit in a separate checkout (no_checkout: true), so
     # raise the pull request in the repository that holds the changes
     # rather than at the workspace root. create-pull-request takes a
     # path relative to the workspace, so the repository must be in it.
-    - name: 'Locate repository for pull request'
+    - name: 'Locate repository holding changes'
       if: env.CHANGES_DETECTED == 'true'
       id: repository
       shell: bash
       env:
         PATH_PREFIX: ${{ inputs.path_prefix }}
       run: |
-        # Locate repository for pull request
+        # Locate repository holding changes
         REPOSITORY_PATH=$(git -C "$PATH_PREFIX" rev-parse --show-toplevel)
         # Compare physical paths in one form: on Windows, git reports
         # D:/... while bash reports /d/...
@@ -396,7 +421,7 @@ runs:
         } >> "$GITHUB_OUTPUT"
 
     - name: 'Create unified pull request'
-      if: env.CHANGES_DETECTED == 'true'
+      if: env.CHANGES_DETECTED == 'true' && inputs.no_pull_request != 'true'
       id: unified-change
       # yamllint disable rule:line-length
       # zizmor: ignore[superfluous-actions] the action is not a thin
