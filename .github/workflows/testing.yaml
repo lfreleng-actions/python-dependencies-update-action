@@ -55,19 +55,52 @@ jobs:
           echo "Error: previous test step did NOT fail ❌"
           exit 1
 
-      # Checkout the test Python project
+      # Checkout the test Python project at a fixed, older commit. The
+      # default branch takes daily Dependabot lock updates, and could
+      # leave nothing to upgrade; this commit's uv.lock always has some.
       - name: "Checkout sample project repository"
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: "lfreleng-actions/test-python-project"
+          ref: "97166e96a171c3490c37285345553a48a2dc13c2"
           path: "test-python-project"
           persist-credentials: false
 
       # Run a valid test against it
       - name: "Run action: ${{ github.repository }}"
+        id: valid
         uses: $/
-        continue-on-error: true  # Organisation level permissions block PR
         with:
           path_prefix: "test-python-project"
           # Flag needed to prevent local/test repository checkout conflicts
           no_checkout: true
+          # The job token is read-only; assert on the update alone
+          no_pull_request: true
+
+      - name: 'Error if step above did NOT update uv.lock'
+        shell: bash
+        env:
+          RESULT_CHANGES: ${{ steps.valid.outputs.changes_detected }}
+          RESULT_TOOLS: ${{ steps.valid.outputs.tools_used }}
+          RESULT_REPOSITORY: ${{ steps.valid.outputs.repository_path }}
+        run: |
+          # Error if step above did NOT update uv.lock
+          if [ "$RESULT_TOOLS" != "uv" ]; then
+            echo "Error: tools_used is '$RESULT_TOOLS', expected 'uv' ❌"
+            exit 1
+          fi
+          if [ "$RESULT_CHANGES" != "true" ]; then
+            echo "Error: changes_detected is '$RESULT_CHANGES' ❌"
+            exit 1
+          fi
+          EXPECTED_REPOSITORY="$GITHUB_WORKSPACE/test-python-project"
+          if [ "$RESULT_REPOSITORY" != "$EXPECTED_REPOSITORY" ]; then
+            echo "Error: repository_path is '$RESULT_REPOSITORY' ❌"
+            exit 1
+          fi
+          if [ -z "$(git -C test-python-project status --porcelain uv.lock)" ]
+          then
+            echo "Error: test-python-project/uv.lock NOT modified ❌"
+            exit 1
+          fi
+          echo "Updated test-python-project/uv.lock using uv ✅"
