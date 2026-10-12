@@ -204,7 +204,7 @@ runs:
     - name: 'Check for PDM stanza: pyproject.toml'
       id: pdm-grep
       # yamllint disable-line rule:line-length
-      uses: lfreleng-actions/file-grep-regex-action@59207af3cc409b4da571dbe6bad3617c0e225173 # v0.1.6
+      uses: lfreleng-actions/file-grep-regex-action@53ce3ab62dea87f702397456b6dd964d9e3fbe78 # v0.1.7
       with:
         flags: ''
         regex: 'tool.pdm'
@@ -214,7 +214,7 @@ runs:
     - name: 'Check for Poetry stanza: pyproject.toml'
       id: poetry-grep
       # yamllint disable-line rule:line-length
-      uses: lfreleng-actions/file-grep-regex-action@59207af3cc409b4da571dbe6bad3617c0e225173 # v0.1.6
+      uses: lfreleng-actions/file-grep-regex-action@53ce3ab62dea87f702397456b6dd964d9e3fbe78 # v0.1.7
       with:
         flags: ''
         regex: 'tool.poetry'
