@@ -281,6 +281,7 @@ runs:
         # Update Python dependencies [uv]
         pip install --upgrade -q uv
         cd "$PATH_PREFIX"
+        # gha-workflow-linter: stderr-merge-ok -- uv log: display text only
         OUTPUT=$(uv lock --upgrade 2>&1)
         UV_EXIT_CODE=$?
         if [[ $UV_EXIT_CODE -ne 0 ]]; then
@@ -309,6 +310,7 @@ runs:
         # Update Python dependencies [poetry]
         pip install --upgrade -q poetry
         cd "$PATH_PREFIX"
+        # gha-workflow-linter: stderr-merge-ok -- poetry log: display text only
         OUTPUT=$(poetry update 2>&1)
         STATUS=$?
         if [ $STATUS -ne 0 ]; then
@@ -336,6 +338,7 @@ runs:
         # Update Python dependencies [pdm]
         pip install --upgrade -q pdm
         cd "$PATH_PREFIX"
+        # gha-workflow-linter: stderr-merge-ok -- pdm log: display text only
         OUTPUT=$(pdm update 2>&1)
         STATUS=$?
         if [[ $STATUS -ne 0 ]]; then
@@ -363,6 +366,7 @@ runs:
         # Update Python dependencies [pipenv]
         pip install --upgrade -q pipenv
         cd "$PATH_PREFIX"
+        # gha-workflow-linter: stderr-merge-ok -- pipenv log: display text only
         OUTPUT=$(pipenv lock 2>&1)
         EXIT_CODE=$?
         if [[ $EXIT_CODE -ne 0 ]]; then
